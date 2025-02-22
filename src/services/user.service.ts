@@ -45,7 +45,9 @@ export class UserService {
         return user;
     }
 
-    async createUser(input: Omit<User, "id">): Promise<Omit<User, "password">> {
+    async createUser(
+        input: Omit<User, "id" | "createdAt" | "updatedAt">
+    ): Promise<Omit<User, "password">> {
         const { email } = input;
 
         const existingUser = await this.userRepository.findOneBy({ email });

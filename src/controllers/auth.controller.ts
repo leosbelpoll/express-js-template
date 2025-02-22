@@ -5,6 +5,8 @@ import {
     BadRequestError,
     InternalServerError,
     HttpCode,
+    Res,
+    CookieParam,
 } from "routing-controllers";
 import { container } from "tsyringe";
 import { AuthService } from "../services/auth.service";
@@ -13,6 +15,7 @@ import {
     InvalidLoginEmail,
     InvalidLoginPassword,
 } from "../utils/errors.utils";
+import { Response } from "express";
 
 interface LoginInput {
     email: string;
@@ -33,11 +36,20 @@ export class AuthController {
     }
 
     @Post("/login")
-    async login(@Body() input: LoginInput) {
+    async login(@Body() input: LoginInput, @Res() response: Response) {
         try {
-            const token = await this.authService.login(input);
+            const { accessToken, refreshToken } =
+                await this.authService.login(input);
 
-            return token;
+            response.cookie("refresh_token", refreshToken, {
+                httpOnly: true, // Prevent JavaScript access
+                secure: true, // Send only over HTTPS
+                sameSite: "strict", // Prevent CSRF
+                path: "/auth/refresh-token", // Limit cookie to refresh endpoint
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            });
+
+            return { accessToken };
         } catch (error) {
             if (
                 error instanceof InvalidLoginEmail ||
@@ -46,8 +58,19 @@ export class AuthController {
                 throw new BadRequestError("Invalid email or password");
             }
 
-            console.log(error);
+            throw new InternalServerError("Something went wrong");
+        }
+    }
 
+    @Post("/refresh-token")
+    async refreshToken(@CookieParam("refresh_token") refreshToken: string) {
+        try {
+            const accessTokenResult = await this.authService.refreshToken({
+                refreshToken,
+            });
+
+            return accessTokenResult;
+        } catch (error) {
             throw new InternalServerError("Something went wrong");
         }
     }
