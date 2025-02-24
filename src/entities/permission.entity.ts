@@ -5,31 +5,19 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     DeleteDateColumn,
-    OneToMany,
     ManyToMany,
 } from "typeorm";
-import { Exclude } from "class-transformer";
-import { RefreshToken } from "./refresh-token.entity";
 import { Role } from "./role.entity";
 
 @Entity()
-export class User {
+export class Permission {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
     @Column({ unique: true })
-    email: string;
+    name: string;
 
-    @Column({ select: false })
-    @Exclude()
-    password: string;
-
-    @OneToMany(() => RefreshToken, (refreshToken) => refreshToken.user, {
-        cascade: true,
-    })
-    refreshTokens: RefreshToken[];
-
-    @ManyToMany(() => Role, (role) => role.users)
+    @ManyToMany(() => Role, (role) => role.permissions)
     roles: Role[];
 
     @CreateDateColumn({ name: "created_at" })

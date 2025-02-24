@@ -4,6 +4,7 @@ import {
     Column,
     CreateDateColumn,
     ManyToOne,
+    DeleteDateColumn,
 } from "typeorm";
 import { User } from "./user.entity";
 
@@ -22,4 +23,7 @@ export class RefreshToken {
 
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;
+
+    @DeleteDateColumn({ name: "deleted_at", nullable: true })
+    deletedAt?: Date;
 }

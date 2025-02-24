@@ -5,32 +5,29 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     DeleteDateColumn,
-    OneToMany,
     ManyToMany,
+    JoinTable,
 } from "typeorm";
-import { Exclude } from "class-transformer";
-import { RefreshToken } from "./refresh-token.entity";
-import { Role } from "./role.entity";
+import { Permission } from "./permission.entity";
+import { User } from "./user.entity";
 
 @Entity()
-export class User {
+export class Role {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
     @Column({ unique: true })
-    email: string;
+    name: string;
 
-    @Column({ select: false })
-    @Exclude()
-    password: string;
-
-    @OneToMany(() => RefreshToken, (refreshToken) => refreshToken.user, {
+    @ManyToMany(() => Permission, (permission) => permission.roles, {
         cascade: true,
     })
-    refreshTokens: RefreshToken[];
+    @JoinTable({ name: "roles_permissions" })
+    permissions: Permission[];
 
-    @ManyToMany(() => Role, (role) => role.users)
-    roles: Role[];
+    @ManyToMany(() => User, (user) => user.roles)
+    @JoinTable({ name: "users_roles" })
+    users: User[];
 
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;

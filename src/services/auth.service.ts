@@ -5,12 +5,15 @@ import { hash, verifyHash } from "../utils/crypto.util";
 import {
     InvalidLoginEmail,
     InvalidLoginPassword,
+    NotFound,
     UserNotFound,
 } from "../utils/errors.utils";
 import { UserService } from "./user.service";
 import { JwtUser } from "../dtos/jwt-user.dto";
 import { EnvService } from "./env.service";
 import { UnauthorizedError } from "routing-controllers";
+import { RefreshTokenService } from "./refresh-token.service";
+import { RefreshToken } from "../entities/refresh-token.entity";
 
 interface LoginInput {
     email: string;
@@ -38,10 +41,12 @@ interface RegisterInput {
 @injectable()
 export class AuthService {
     private userService: UserService;
+    private refreshTokenService: RefreshTokenService;
     private envService: EnvService;
 
     constructor() {
         this.userService = container.resolve(UserService);
+        this.refreshTokenService = container.resolve(RefreshTokenService);
         this.envService = container.resolve(EnvService);
     }
 
@@ -97,7 +102,22 @@ export class AuthService {
                 refreshTokenOptions
             );
 
-            return { accessToken, refreshToken };
+            const removeOtherRefreshTokensAfterLogin =
+                this.envService.getEnv<boolean>(
+                    "REMOVE_OTHER_REFRESH_TOKENS_AFTER_LOGIN"
+                );
+
+            if (removeOtherRefreshTokensAfterLogin) {
+                await this.refreshTokenService.removeUserRefreshTokens(user.id);
+            }
+
+            const newRefreshToken =
+                await this.refreshTokenService.createRefreshToken({
+                    token: refreshToken,
+                    user,
+                });
+
+            return { accessToken, refreshToken: newRefreshToken.token };
         } catch (error) {
             if (error instanceof UserNotFound) {
                 throw new InvalidLoginEmail("User not found", { email });
@@ -109,6 +129,21 @@ export class AuthService {
 
     async refreshToken(input: RefreshTokenInput): Promise<RefreshTokenOutput> {
         const { refreshToken } = input;
+
+        let dbRefreshToken: RefreshToken;
+
+        try {
+            dbRefreshToken =
+                await this.refreshTokenService.getRefreshTokenByToken(
+                    refreshToken
+                );
+        } catch (error) {
+            if (error instanceof NotFound) {
+                throw new UnauthorizedError("Invalid token");
+            }
+
+            throw error;
+        }
 
         const refreshTokenSecret = this.envService.getEnv(
             "REFRESH_TOKEN_SECRET"
@@ -129,8 +164,12 @@ export class AuthService {
                 userId: payload.userId,
             };
 
+            const accessTokenDuration = this.envService.getEnv(
+                "ACCESS_TOKEN_DURATION"
+            );
+
             const accessTokenOptions: jwt.SignOptions = {
-                expiresIn: "1m",
+                expiresIn: accessTokenDuration as any,
             };
 
             accessToken = jwt.sign(
@@ -152,6 +191,7 @@ export class AuthService {
             ...input,
             password: hashedPassword,
             refreshTokens: [],
+            roles: [],
         });
 
         return user;

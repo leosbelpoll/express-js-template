@@ -7,6 +7,8 @@ import {
     HttpCode,
     Res,
     CookieParam,
+    UnauthorizedError,
+    ForbiddenError,
 } from "routing-controllers";
 import { container } from "tsyringe";
 import { AuthService } from "../services/auth.service";
@@ -41,9 +43,15 @@ export class AuthController {
             const { accessToken, refreshToken } =
                 await this.authService.login(input);
 
+            response.clearCookie("refresh_token", {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "strict",
+            });
+
             response.cookie("refresh_token", refreshToken, {
                 httpOnly: true, // Prevent JavaScript access
-                secure: true, // Send only over HTTPS
+                secure: process.env.NODE_ENV === "production", // Send only over HTTPS
                 sameSite: "strict", // Prevent CSRF
                 path: "/auth/refresh-token", // Limit cookie to refresh endpoint
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -71,6 +79,13 @@ export class AuthController {
 
             return accessTokenResult;
         } catch (error) {
+            if (
+                error instanceof UnauthorizedError ||
+                error instanceof ForbiddenError
+            ) {
+                throw error;
+            }
+
             throw new InternalServerError("Something went wrong");
         }
     }
